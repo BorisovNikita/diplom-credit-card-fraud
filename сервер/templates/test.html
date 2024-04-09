@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% block content %}
+<table id="confusion-matrix" class="table table-bordered confm">
+    <tbody>
+        <tr>
+            <th>Confusion matrix</th>
+            <th>NO FRAUD</th>
+            <th>FRAUD</th>
+        </tr>
+        <tr>
+            <th>NO FRAUD</th>
+            <td id="tn"></td>
+            <td id="fn"></td>
+        </tr>
+        <tr>
+            <th>FRAUD</th>
+            <td id="fp"></td>
+            <td id="tp"></td>
+        </tr>
+    </tbody>
+</table>
+<div class="table-wrapper-scroll-y my-custom-scrollbar2">
+    <table id="data-table" class="table table-bordered table-striped mb-0">
+        <thead>
+            <tr>
+                <th class="no-visible"></th>
+                <th>ID</th>
+                <th>target</th>
+                <th>predict</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+    <!-- <button id="load">
+        load
+    </button> -->
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+    var socket = io.connect('http://' + document.domain + ':' + location.port);
+    let last_id = -1;
+    let first_id = -1;
+    let conf_m =[[0, 0],[0, 0]];
+    var updateInterval = '{{ updateInterval }}';
+    socket.emit('initialize_data', {get_conf_m: true});
+
+    var myHandler = setInterval(function(){
+        socket.emit('check_update', {first_id: first_id, conf_m: conf_m})
+    }, updateInterval);
+
+
+    // Обработчик события обновления таблицы
+    socket.on('update_table', function (data) {
+        last_id = data.last_id ? data.last_id: last_id;
+        first_id = data.first_id ? data.first_id: first_id;
+        // Обновление таблицы с новыми данными
+        var insert_data = [];
+        insert_data = data.bottom_data ? data.bottom_data : insert_data;
+        insert_data = data.top_data ? data.top_data : insert_data;
+        // console.log(insert_data);
+        // console.log(last_id, first_id);
+        insert_data.forEach(element => {
+            var newRow = `<tr class="${element[6]===1 && element[5]===1 ? 'row-red': (element[6] !== element[5] ? 'row-yellow' : '')}">`
+                + `<td class="no-visible"><a href="{{ url_for('transaction', id='TESTID') }}" class='stretched-link' /></td>`.replace('TESTID', element[0])
+                +`<td>` + element[0] + '</td><td>' + element[5] + '</td><td>' + element[6] + '</td></tr>';
+            data.bottom_data ? $('#data-table tbody').append(newRow) : $('#data-table tbody').prepend(newRow);
+            if (data.top_data) {conf_m[element[5]][element[6]] = conf_m[element[5]][element[6]] + 1;};
+        })
+
+        $("#tn").text(conf_m[0][0]);
+        $("#fn").text(conf_m[0][1]);
+        $("#fp").text(conf_m[1][0]);
+        $("#tp").text(conf_m[1][1]);
+    });
+
+    socket.on('update_conf_m', function (data) {
+        conf_m = data.conf_m;
+        $("#tn").text(conf_m[0][0]);
+        $("#fn").text(conf_m[0][1]);
+        $("#fp").text(conf_m[1][0]);
+        $("#tp").text(conf_m[1][1]);
+    });
+
+
+    $('.my-custom-scrollbar2').scroll(function() {
+            if ($(this).scrollTop() + $(this).innerHeight() >= $(this)[0].scrollHeight) {
+                // Когда пользователь достигает конца таблицы, отправляем запрос на сервер для загрузки дополнительных данных
+                if (last_id != 1) { socket.emit('lazy_load_request', { last_id: last_id }) };
+            }
+        });
+
+    
+
+</script>
+{% endblock %}

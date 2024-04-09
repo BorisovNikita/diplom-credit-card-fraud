@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="table-wrapper-scroll-y my-custom-scrollbar">
+    <table id="data-table" class="table table-bordered table-striped mb-0">
+        <thead>
+            <tr>
+                <th class="no-visible"></th>
+                <th>Время</th>
+                <th>Отправитель</th>
+                <th>Получатель</th>
+                <th>Сумма</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+    <!-- <button id="load">
+        load
+    </button> -->
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+    var socket = io.connect('http://' + document.domain + ':' + location.port);
+    let last_id = -1;
+    let first_id = -1;
+    var updateInterval = '{{ updateInterval }}';
+    socket.emit('initialize_data', { get_conf_m: false });
+
+    var myHandler = setInterval(function () {
+        socket.emit('check_update', { first_id: first_id })
+    }, updateInterval);
+
+
+    // Обработчик события обновления таблицы
+    socket.on('update_table', function (data) {
+        // Проверка метки времени последнего обновления
+        last_id = data.last_id ? data.last_id : last_id;
+        first_id = data.first_id ? data.first_id : first_id;
+        // Обновление таблицы с новыми данными
+        var insert_data = [];
+        insert_data = data.bottom_data ? data.bottom_data : insert_data;
+        insert_data = data.top_data ? data.top_data : insert_data;
+
+        insert_data.forEach(element => {
+            var newRow = `<tr id="trans_${element[0]}" class="${element[6] === 1 ? 'row-red' : ''}">`
+                + `<td class="no-visible"><a href="{{ url_for('transaction', id='TESTID') }}" class='stretched-link' /></td>`.replace('TESTID', element[0])
+                + `<td>`+ new Date(element[1] * 1000).toLocaleString("ru-RU") + '</td><td>' + element[2]
+                + '</td><td>' + element[3] + '</td><td>' + element[4] + '</td></tr>';
+            data.bottom_data ? $('#data-table tbody').append(newRow) : $('#data-table tbody').prepend(newRow);
+        })
+    });
+
+
+    $('.my-custom-scrollbar').scroll(function () {
+        if ($(this).scrollTop() + $(this).innerHeight() >= $(this)[0].scrollHeight) {
+            // Когда пользователь достигает конца таблицы, отправляем запрос на сервер для загрузки дополнительных данных
+            if (last_id != 1) { socket.emit('lazy_load_request', { last_id: last_id }) };
+        }
+    });
+
+
+
+</script>
+{% endblock %}
